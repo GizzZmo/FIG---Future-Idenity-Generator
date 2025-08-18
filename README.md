@@ -1,10 +1,3 @@
-<img width="896" height="1280" alt="image" src="https://github.com/user-attachments/assets/27cf028c-c711-444a-bdfa-b6cff6f1aa38" />
-
-## Ethan Vance
-34 years old · Oslo, Norway
-
-Ethan Vance is a leading bio-data architect based in Oslo, Norway, specializing in neural interface design for enhanced human-AI collaboration. In 2035, he dedicates his free time to competitive 'Quantum Chess,' a holographic sport that requires deep probabilistic analysis and strategic foresight, often live-streamed to a global audience of enthusiasts.
-
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>

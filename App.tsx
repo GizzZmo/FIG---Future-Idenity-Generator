@@ -5,46 +5,68 @@ import { generateIdentityText, generateIdentityImage } from './services/geminiSe
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import IdentityCard from './components/IdentityCard';
+import HistoryPanel from './components/HistoryPanel';
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [identityHistory, setIdentityHistory] = useState<Identity[]>([]);
+  const [selectedIdentityIndex, setSelectedIdentityIndex] = useState<number | null>(null);
 
   const handleGenerate = useCallback(async (options: GenerationOptions) => {
     setIsLoading(true);
     setError(null);
-    setIdentity(null);
 
     try {
       const identityTextData = await generateIdentityText(options);
       
-      const imagePrompt = `Photorealistic portrait of a futuristic ${identityTextData.gender}, ${identityTextData.age} years old, from ${identityTextData.location}. High-detail, cinematic lighting, set in the year ${new Date().getFullYear() + 10}.`;
+      const appearance = options.ethnicity ? `with a ${options.ethnicity} appearance` : '';
+      const imagePrompt = `${options.imageStyle} ${options.cameraShot} of a ${identityTextData.age}-year-old ${identityTextData.gender} from ${identityTextData.location} ${appearance}.
+      As a ${identityTextData.profession}, their expression reflects a personality that is ${identityTextData.personalityTraits.join(', ')}.
+      The scene is lit with ${options.lightingStyle}.
+      High-detail, futuristic, set in the year ${new Date().getFullYear() + 10}.`.replace(/\s\s+/g, ' ').trim();
       
-      const imageBase64 = await generateIdentityImage(imagePrompt);
+      const imageBase64 = await generateIdentityImage(imagePrompt, options.aspectRatio);
 
-      setIdentity({
+      const newIdentity: Identity = {
         ...identityTextData,
         imageUrl: `data:image/jpeg;base64,${imageBase64}`,
-      });
+        imagePrompt,
+      };
+
+      setIdentityHistory(prev => [newIdentity, ...prev]);
+      setSelectedIdentityIndex(0);
+
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
+      // Keep existing selection on error
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const handleSelectIdentity = useCallback((index: number) => {
+    setSelectedIdentityIndex(index);
+  }, []);
+
+  const selectedIdentity = selectedIdentityIndex !== null ? identityHistory[selectedIdentityIndex] : undefined;
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-4xl mx-auto">
+      <div className="w-full max-w-7xl mx-auto">
         <Header />
         <main className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 flex flex-col gap-8">
             <ControlPanel onGenerate={handleGenerate} isLoading={isLoading} />
+            <HistoryPanel 
+                history={identityHistory}
+                onSelect={handleSelectIdentity}
+                selectedIndex={selectedIdentityIndex}
+            />
           </div>
           <div className="lg:col-span-2">
-            <IdentityCard identity={identity} isLoading={isLoading} error={error} />
+            <IdentityCard identity={selectedIdentity} isLoading={isLoading} error={error} />
           </div>
         </main>
       </div>
