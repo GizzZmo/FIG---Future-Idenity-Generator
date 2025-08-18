@@ -1,0 +1,5 @@
+{
+  "name": "Future Identity Generator",
+  "description": "An application that uses Google Gemini to generate fictional identities from around the world, set approximately 10 years in the future. It creates a portrait and a short bio for each identity.",
+  "requestFramePermissions": []
+}
