@@ -1,3 +1,4 @@
+<img width="856" height="962" alt="Skjermbilde 2025-08-18 114938" src="https://github.com/user-attachments/assets/01d77507-6743-4cb7-aede-827815a6069a" />
 
 <img width="1089" height="1007" alt="Skjermbilde 2025-08-18 103628" src="https://github.com/user-attachments/assets/756ed9e5-dd2f-421d-92a8-451deba7181a" />
 <img width="508" height="915" alt="Skjermbilde 2025-08-18 103719" src="https://github.com/user-attachments/assets/add4e3f0-88d8-40d5-aa0f-b41e4965e80b" />
