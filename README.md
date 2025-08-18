@@ -1,3 +1,9 @@
+
+<img width="1089" height="1007" alt="Skjermbilde 2025-08-18 103628" src="https://github.com/user-attachments/assets/756ed9e5-dd2f-421d-92a8-451deba7181a" />
+<img width="508" height="915" alt="Skjermbilde 2025-08-18 103719" src="https://github.com/user-attachments/assets/add4e3f0-88d8-40d5-aa0f-b41e4965e80b" />
+<img width="947" height="926" alt="Skjermbilde 2025-08-18 103557" src="https://github.com/user-attachments/assets/cb6c706b-e289-4343-bf39-1ac1e14c29e5" />
+<img width="977" height="938" alt="Skjermbilde 2025-08-18 103607" src="https://github.com/user-attachments/assets/432f52c2-6a0e-49b8-bc54-8351f3de0c34" />
+
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
