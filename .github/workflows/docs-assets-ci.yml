@@ -55,7 +55,7 @@ jobs:
           failures=0
           checked=0
           screenshot_count=0
-          request_timeout=10
+          request_timeout_seconds=10
 
           for file in "${markdown_files[@]}"; do
             file_dir="$(dirname "$file")"
@@ -85,12 +85,12 @@ jobs:
 
               if [[ "$clean_ref" =~ ^https?:// ]]; then
                 head_error_file="$(mktemp)"
-                head_status="$(curl --silent --show-error --location --head --output /dev/null --write-out '%{http_code}' --max-time "$request_timeout" "$clean_ref" 2>"$head_error_file" || echo "000")"
+                head_status="$(curl --silent --show-error --location --head --output /dev/null --write-out '%{http_code}' --max-time "$request_timeout_seconds" "$clean_ref" 2>"$head_error_file" || echo "000")"
                 head_error="$(tr '\n' ' ' < "$head_error_file" | sed -E 's/[[:space:]]+/ /g')"
                 rm -f "$head_error_file"
                 if [[ "$head_status" == "405" ]]; then
                   get_error_file="$(mktemp)"
-                  if ! curl --silent --show-error --location --fail --output /dev/null --max-time "$request_timeout" "$clean_ref" 2>"$get_error_file"; then
+                  if ! curl --silent --show-error --location --fail --output /dev/null --max-time "$request_timeout_seconds" "$clean_ref" 2>"$get_error_file"; then
                     get_error="$(tr '\n' ' ' < "$get_error_file" | sed -E 's/[[:space:]]+/ /g')"
                     echo "FAIL (url): $file -> $ref (HEAD: 405, GET failed: ${get_error:-unknown error})" | tee -a "$report_file"
                     failures=$((failures + 1))
