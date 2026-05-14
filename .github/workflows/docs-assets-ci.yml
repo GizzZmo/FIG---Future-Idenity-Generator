@@ -56,6 +56,64 @@ jobs:
           checked=0
           screenshot_count=0
           request_timeout_seconds=10
+          repo_root="$(pwd -P)"
+
+          is_safe_public_url() {
+            local url="$1"
+            python - "$url" <<'PY'
+import ipaddress
+import socket
+import sys
+from urllib.parse import urlparse
+
+url = sys.argv[1]
+parsed = urlparse(url)
+
+if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    raise SystemExit(1)
+
+host = parsed.hostname.lower()
+blocked_hosts = {
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "0.0.0.0",
+    "169.254.169.254",
+    "metadata.google.internal",
+}
+
+if host in blocked_hosts or host.endswith(".local"):
+    raise SystemExit(1)
+
+try:
+    ip = ipaddress.ip_address(host)
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        raise SystemExit(1)
+except ValueError:
+    try:
+        infos = socket.getaddrinfo(host, None)
+        for info in infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                raise SystemExit(1)
+    except Exception:
+        pass
+PY
+          }
 
           for file in "${markdown_files[@]}"; do
             file_dir="$(dirname "$file")"
@@ -84,13 +142,19 @@ jobs:
               fi
 
               if [[ "$clean_ref" =~ ^https?:// ]]; then
+                if ! is_safe_public_url "$clean_ref"; then
+                  echo "FAIL (url): $file -> $ref (blocked as unsafe URL)" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                  continue
+                fi
+
                 head_error_file="$(mktemp)"
-                head_status="$(curl --silent --show-error --location --head --output /dev/null --write-out '%{http_code}' --max-time "$request_timeout_seconds" "$clean_ref" 2>"$head_error_file" || echo "000")"
+                head_status="$(curl --silent --show-error --head --output /dev/null --write-out '%{http_code}' --max-time "$request_timeout_seconds" "$clean_ref" 2>"$head_error_file" || echo "000")"
                 head_error="$(tr '\n' ' ' < "$head_error_file" | sed -E 's/[[:space:]]+/ /g')"
                 rm -f "$head_error_file"
                 if [[ "$head_status" == "405" ]]; then
                   get_error_file="$(mktemp)"
-                  if ! curl --silent --show-error --location --fail --output /dev/null --max-time "$request_timeout_seconds" "$clean_ref" 2>"$get_error_file"; then
+                  if ! curl --silent --show-error --fail --output /dev/null --max-time "$request_timeout_seconds" "$clean_ref" 2>"$get_error_file"; then
                     get_error="$(tr '\n' ' ' < "$get_error_file" | sed -E 's/[[:space:]]+/ /g')"
                     echo "FAIL (url): $file -> $ref (HEAD: 405, GET failed: ${get_error:-unknown error})" | tee -a "$report_file"
                     failures=$((failures + 1))
@@ -105,8 +169,11 @@ jobs:
               elif [[ "$clean_ref" =~ ^# ]]; then
                 continue
               else
-                resolved_path="$file_dir/$clean_ref"
-                if [ ! -f "$resolved_path" ]; then
+                resolved_path="$(realpath -m "$file_dir/$clean_ref")"
+                if [[ "$resolved_path" != "$repo_root/"* && "$resolved_path" != "$repo_root" ]]; then
+                  echo "FAIL (unsafe path): $file -> $ref (resolved outside repository)" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                elif [ ! -f "$resolved_path" ]; then
                   echo "FAIL (missing file): $file -> $ref (resolved: $resolved_path)" | tee -a "$report_file"
                   failures=$((failures + 1))
                 fi
