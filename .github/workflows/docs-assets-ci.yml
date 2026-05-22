@@ -1,0 +1,204 @@
+name: Docs Assets CI
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'docs/**'
+      - 'assets/**'
+      - 'screenshots/**'
+      - '.github/workflows/docs-assets-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - 'docs/**'
+      - 'assets/**'
+      - 'screenshots/**'
+      - '.github/workflows/docs-assets-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-doc-assets:
+    name: Validate docs assets and screenshots
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate markdown image references
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ci-reports
+          report_file="ci-reports/docs-assets-report.txt"
+          screenshot_file="ci-reports/screenshots-report.txt"
+          : > "$report_file"
+          : > "$screenshot_file"
+
+          mapfile -t markdown_files < <(git ls-files '*.md')
+
+          if [ "${#markdown_files[@]}" -eq 0 ]; then
+            echo "No markdown files found." | tee -a "$report_file"
+            exit 0
+          fi
+
+          echo "Validated markdown files:" | tee -a "$report_file"
+          printf '%s\n' "${markdown_files[@]}" | tee -a "$report_file"
+          echo | tee -a "$report_file"
+
+          failures=0
+          checked=0
+          screenshot_count=0
+          request_timeout_seconds=10
+          repo_root="$(pwd -P)"
+
+          is_safe_public_url() {
+            local url="$1"
+            python - "$url" <<'PY'
+import ipaddress
+import socket
+import sys
+from urllib.parse import urlparse
+
+url = sys.argv[1]
+parsed = urlparse(url)
+
+if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    raise SystemExit(1)
+
+host = parsed.hostname.lower()
+blocked_hosts = {
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "0.0.0.0",
+    "169.254.169.254",
+    "metadata.google.internal",
+}
+
+if host in blocked_hosts or host.endswith(".local"):
+    raise SystemExit(1)
+
+try:
+    ip = ipaddress.ip_address(host)
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        raise SystemExit(1)
+except ValueError:
+    try:
+        infos = socket.getaddrinfo(host, None)
+        for info in infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                raise SystemExit(1)
+    except Exception:
+        pass
+PY
+          }
+
+          for file in "${markdown_files[@]}"; do
+            file_dir="$(dirname "$file")"
+
+            mapfile -t refs < <(
+              {
+                grep -oE '!\[[^]]*]\(([^)]+)\)' "$file" | sed -E 's/!\[[^]]*]\(([^)]+)\)/\1/' || true
+                grep -oE '<img[^>]+src="[^"]+"' "$file" | sed -E 's/.*src="([^"]+)".*/\1/' || true
+              } | sed -E 's/[[:space:]]+$//' | sed '/^$/d' | sort -u
+            )
+
+            if [ "${#refs[@]}" -eq 0 ]; then
+              continue
+            fi
+
+            for ref in "${refs[@]}"; do
+              checked=$((checked + 1))
+
+              clean_ref="${ref%%\#*}"
+              clean_ref="${clean_ref%%\?*}"
+              lower_ref="${clean_ref,,}"
+
+              if [[ "$lower_ref" == *"screenshot"* ]]; then
+                screenshot_count=$((screenshot_count + 1))
+                echo "$file -> $ref" >> "$screenshot_file"
+              fi
+
+              if [[ "$clean_ref" =~ ^https?:// ]]; then
+                if ! is_safe_public_url "$clean_ref"; then
+                  echo "FAIL (url): $file -> $ref (blocked as unsafe URL)" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                  continue
+                fi
+
+                head_error_file="$(mktemp)"
+                head_status="$(curl --silent --show-error --head --output /dev/null --write-out '%{http_code}' --max-time "$request_timeout_seconds" "$clean_ref" 2>"$head_error_file" || echo "000")"
+                head_error="$(tr '\n' ' ' < "$head_error_file" | sed -E 's/[[:space:]]+/ /g')"
+                rm -f "$head_error_file"
+                if [[ "$head_status" == "405" ]]; then
+                  get_error_file="$(mktemp)"
+                  if ! curl --silent --show-error --fail --output /dev/null --max-time "$request_timeout_seconds" "$clean_ref" 2>"$get_error_file"; then
+                    get_error="$(tr '\n' ' ' < "$get_error_file" | sed -E 's/[[:space:]]+/ /g')"
+                    echo "FAIL (url): $file -> $ref (HEAD: 405, GET failed: ${get_error:-unknown error})" | tee -a "$report_file"
+                    failures=$((failures + 1))
+                  fi
+                  rm -f "$get_error_file"
+                elif [[ "$head_status" == "000" || "$head_status" -ge 400 ]]; then
+                  echo "FAIL (url): $file -> $ref (HEAD: $head_status, error: ${head_error:-unknown error})" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                fi
+              elif [[ "$clean_ref" =~ ^data: ]]; then
+                continue
+              elif [[ "$clean_ref" =~ ^# ]]; then
+                continue
+              else
+                resolved_path="$(realpath -m "$file_dir/$clean_ref")"
+                if [[ "$resolved_path" != "$repo_root/"* && "$resolved_path" != "$repo_root" ]]; then
+                  echo "FAIL (unsafe path): $file -> $ref (resolved outside repository)" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                elif [ ! -f "$resolved_path" ]; then
+                  echo "FAIL (missing file): $file -> $ref (resolved: $resolved_path)" | tee -a "$report_file"
+                  failures=$((failures + 1))
+                fi
+              fi
+            done
+          done
+
+          echo | tee -a "$report_file"
+          echo "Checked references: $checked" | tee -a "$report_file"
+          echo "Screenshot-like references: $screenshot_count" | tee -a "$report_file"
+
+          if [ "$screenshot_count" -eq 0 ]; then
+            echo "No screenshot-like references found." > "$screenshot_file"
+          fi
+
+          if [ "$failures" -gt 0 ]; then
+            echo "Validation failed with $failures issue(s)." | tee -a "$report_file"
+            exit 1
+          fi
+
+          echo "Validation passed with no broken references." | tee -a "$report_file"
+
+      - name: Upload docs and screenshot reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-assets-validation-report
+          path: ci-reports/
