@@ -1,6 +1,4 @@
-Here’s a revised README.md with improved font size, aesthetics, and usability—all using Markdown for clean presentation. Since GitHub Markdown does not support direct font size changes, enhancements are made through structure, spacing, and emphasis for readability.
 
----
 
 <div align="center">
   <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
